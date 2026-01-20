@@ -1,10 +1,10 @@
 # agentsh + Modal: Secure AI Agent Sandbox
 
-This project explores integrating [agentsh](https://github.com/canyonroad/agentsh) with [Modal Sandboxes](https://modal.com/products/sandboxes) for running AI agent code.
+This project demonstrates integrating [agentsh](https://github.com/canyonroad/agentsh) v0.8.8 with [Modal Sandboxes](https://modal.com/products/sandboxes) for running AI agent code.
 
 ## Important: Modal Platform Limitations
 
-**Modal sandboxes do not support the kernel features required for agentsh's full security interception.** This is documented here for reference. For full agentsh functionality, use a platform that supports seccomp user notifications.
+**Modal sandboxes do not support the kernel features required for agentsh's full security interception.** While `agentsh detect` reports seccomp_user_notify as available, it fails at runtime. For full agentsh functionality, use a platform like [E2B](https://e2b.dev) that supports seccomp user notifications.
 
 ### What Works on Modal
 
@@ -12,76 +12,33 @@ This project explores integrating [agentsh](https://github.com/canyonroad/agents
 |---------|--------|-------|
 | agentsh daemon | ✅ | Health, metrics, ready endpoints |
 | Policy configuration | ✅ | Files loaded and parsed |
-| Session management API | ✅ | Available via HTTP/gRPC |
+| Session management API | ✅ | Create, list, info via HTTP/gRPC |
 | Audit logging | ✅ | Events stored in SQLite |
 | DLP patterns | ✅ | API key redaction configured |
+| Modal native isolation | ✅ | Metadata blocked, container isolation |
 
 ### What Doesn't Work on Modal
 
 | Feature | Requires | Modal Support | Impact |
 |---------|----------|---------------|--------|
+| **agentsh exec** | `SECCOMP_RET_USER_NOTIF` | ❌ | Cannot execute commands through agentsh |
 | **Shell shim** | `SECCOMP_RET_USER_NOTIF` | ❌ | Cannot intercept shell commands |
 | **FUSE filesystem** | `CAP_SYS_ADMIN` + mount | ❌ | Cannot intercept file operations |
 | **iptables/netfilter** | `CAP_NET_ADMIN` | ❌ | Cannot intercept network calls |
-| **Transparent proxy** | iptables REDIRECT | ❌ | Cannot force traffic through proxy |
 
 ### Why These Limitations Exist: gVisor Runtime
 
-Modal sandboxes run on **[gVisor](https://gvisor.dev/)**, a user-space kernel that intercepts syscalls for security isolation. This is visible in the environment:
+Modal sandboxes run on **[gVisor](https://gvisor.dev/)**, a user-space kernel that intercepts syscalls for security isolation:
 
 ```
 MODAL_FUNCTION_RUNTIME=gvisor
 ```
 
-gVisor intentionally doesn't implement many kernel features that agentsh requires:
-
-1. **Seccomp user notifications** - gVisor doesn't support `SECCOMP_RET_USER_NOTIF`. Error: `seccomp API version 2 lacks user notify`
-
-2. **FUSE mounts** - gVisor intercepts file operations itself; allowing FUSE would bypass its isolation. Error: `fusermount: mount failed: Operation not permitted`
-
-3. **mount() syscall** - `CAP_SYS_ADMIN` is not granted. Error: `mount: /mnt: permission denied`
-
-4. **iptables/netfilter** - gVisor doesn't implement netfilter. Error: `iptables: Failed to initialize nft: Protocol not supported`
-
-5. **New namespaces** - Network and PID namespace creation blocked. Error: `unshare failed: Operation not permitted`
-
-These are fundamental architectural decisions in gVisor, not configuration options.
-
-### Can You Install FUSE/Other Packages?
-
-**Yes, packages install fine. No, they won't work at runtime.**
-
-| Package | Installs? | Works? | Error |
-|---------|-----------|--------|-------|
-| fuse3, libfuse3-dev | ✅ | ❌ | `mount failed: Operation not permitted` |
-| bindfs, sshfs | ✅ | ❌ | `mount failed: Operation not permitted` |
-| iptables | ✅ | ❌ | `Protocol not supported` |
-| kmod (modprobe) | ✅ | ❌ | No `/proc/modules` |
-| util-linux (unshare) | ✅ | ❌ | `Operation not permitted` (net/pid ns) |
-
-The `/dev/fuse` device exists and FUSE is in `/proc/filesystems`, but the actual `mount()` syscall is blocked by gVisor. **Installing different packages cannot work around kernel-level restrictions.**
-
-### What Does Work in gVisor
-
-| Feature | Status | Notes |
-|---------|--------|-------|
-| User namespace | ✅ | `unshare --user` works |
-| Network inspection | ✅ | `ip link`, `ip route` work |
-| Cgroups visibility | ✅ | Can read `/sys/fs/cgroup/` |
-| Process capabilities | ✅ | `capsh --print` works |
-| Basic syscalls | ✅ | File I/O, networking, etc. |
-
-## What Modal Does Provide
-
-Modal sandboxes have their own isolation that provides some security:
-
-| Security Feature | Status | Details |
-|------------------|--------|---------|
-| Cloud metadata blocked | ✅ | 169.254.169.254 times out |
-| Container isolation | ✅ | Separate PID/network/mount namespaces |
-| No Docker socket | ✅ | `/var/run/docker.sock` doesn't exist |
-| No host filesystem | ✅ | Isolated root filesystem |
-| Resource limits | ✅ | CPU, memory, timeout limits |
+Key limitation: gVisor reports seccomp_user_notify as available during detection, but fails at runtime:
+```
+install seccomp filter: seccomp API version 2 lacks user notify
+agentsh: command failed
+```
 
 ## Quick Start
 
@@ -91,56 +48,66 @@ pip install modal
 
 # Authenticate with Modal
 modal setup
-# Or set environment variables:
-# export MODAL_TOKEN_ID=<your-token-id>
-# export MODAL_TOKEN_SECRET=<your-token-secret>
 
-# Run the demo
+# Run capability detection
+modal run detect.py
+
+# Run the test suite
+modal run tests.py
+
+# Run the full demo
 modal run example.py
 ```
 
 ## Test Results
 
-The demo runs **17 tests** showing what works:
+The test suite (`tests.py`) runs **13 tests** showing what works:
 
 ```
 ======================================================================
-  Modal Native Network Isolation
+  DAEMON & API TESTS
 ======================================================================
-[TEST] AWS metadata blocked (Modal)     -> [PASS] (timeout)
-[TEST] GCP metadata blocked (Modal)     -> [PASS] (timeout)
-[TEST] Public HTTPS works               -> [PASS] (HTTP/2 200)
-[TEST] Public HTTP works                -> [PASS] (HTTP/1.1 200)
+    ✓ Health endpoint: PASS
+    ✓ Ready endpoint: PASS
+    ✓ Metrics endpoint: PASS
+    ✓ Policy list: PASS
+    ✓ Server info: PASS
 
 ======================================================================
-  agentsh Daemon (Control API)
+  SESSION MANAGEMENT TESTS
 ======================================================================
-[TEST] agentsh health check             -> [PASS] (ok)
-[TEST] agentsh metrics endpoint         -> [PASS] (metrics returned)
-[TEST] agentsh ready check              -> [PASS] (ready)
+    ✓ Session created: session-xxx...
+    ✓ Session info retrieved
 
 ======================================================================
-  Basic Sandbox Operations
+  MODAL NATIVE ISOLATION TESTS
 ======================================================================
-[TEST] Basic echo                       -> [PASS]
-[TEST] List files                       -> [PASS]
-[TEST] Git version                      -> [PASS] (git 2.39.5)
-[TEST] Python version                   -> [PASS] (Python 3.11.12)
-[TEST] agentsh binary                   -> [PASS] (agentsh 0.7.9)
-[TEST] Policy file loaded               -> [PASS]
+    ✓ AWS metadata blocked
+    ✓ No docker socket
+    ✓ No host filesystem
+    ✓ Container runs as root
+    ✓ Git available
+    ✓ Python available
 
 ======================================================================
-  Modal Container Isolation
+  AGENTSH EXEC LIMITATION
 ======================================================================
-[TEST] Running as root                  -> [PASS] (isolated root)
-[TEST] No docker socket                 -> [PASS]
-[TEST] No host PID namespace            -> [PASS]
-[TEST] Isolated filesystem              -> [PASS]
+    ⚠️  agentsh exec: Not available (seccomp limitation)
 
 ======================================================================
-  SUMMARY: 17 passed, 0 failed
+  SUMMARY: 13 passed, 0 failed
 ======================================================================
 ```
+
+## Files
+
+| File | Description |
+|------|-------------|
+| `example.py` | Full demo showing Modal + agentsh capabilities |
+| `tests.py` | Test suite verifying what works on Modal |
+| `detect.py` | Runs `agentsh detect` inside Modal sandbox |
+| `config.yaml` | agentsh server configuration |
+| `default.yaml` | Security policy rules (loaded but not enforced without exec) |
 
 ## Architecture on Modal
 
@@ -149,16 +116,16 @@ The demo runs **17 tests** showing what works:
 │                   Modal Sandbox (gVisor runtime)                 │
 │                                                                  │
 │  ┌───────────────────────────────────────────────────────────┐  │
-│  │  agentsh daemon (port 18080)                              │  │
+│  │  agentsh daemon v0.8.8 (port 18080)                       │  │
 │  │  • Health/ready endpoints                                 │  │
 │  │  • Metrics (Prometheus format)                            │  │
 │  │  • Session management API                                 │  │
 │  │  • Policy configuration loaded                            │  │
 │  │  • DLP patterns ready                                     │  │
 │  │                                                           │  │
-│  │  ⚠️  Shell shim NOT active (gVisor lacks seccomp notify)  │  │
+│  │  ⚠️  agentsh exec NOT working (gVisor seccomp limitation) │  │
+│  │  ⚠️  Shell shim NOT active (same limitation)              │  │
 │  │  ⚠️  FUSE filesystem NOT active (gVisor blocks mount)     │  │
-│  │  ⚠️  iptables NOT active (gVisor lacks netfilter)         │  │
 │  └───────────────────────────────────────────────────────────┘  │
 │                                                                  │
 │  gVisor Isolation:                                               │
@@ -170,66 +137,47 @@ The demo runs **17 tests** showing what works:
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## Files
+## Configuration
 
-| File | Description |
-|------|-------------|
-| `example.py` | Demo script showing what works on Modal |
-| `config.yaml` | agentsh server configuration |
-| `default.yaml` | Security policy rules (loaded but not enforced without shim) |
+### config.yaml
 
-## Alternatives for Full agentsh Support
+The server configuration is optimized for Modal's environment:
 
-For full agentsh functionality (command interception, file monitoring, network filtering), you need a platform that provides:
-
-- **Seccomp user notifications** (`SECCOMP_RET_USER_NOTIF`) - for command interception
-- **FUSE support** (`CAP_SYS_ADMIN` + mount) - for file operation monitoring
-- **Network capabilities** (`CAP_NET_ADMIN`) - for network filtering
-
-### Docker with --privileged
-
-```bash
-docker run --privileged -it agentsh-image
+```yaml
+# Key settings for Modal
+sandbox:
+  enabled: true
+  allow_degraded: true
+  seccomp:
+    enabled: false  # Doesn't work at runtime on Modal
+  fuse:
+    enabled: false
+  cgroups:
+    enabled: false
 ```
 
-Gives full access to kernel features but reduces isolation.
+### default.yaml Policy
 
-### Full VM (EC2, GCE, etc.)
-
-Running on a full VM gives complete control over kernel features.
-
-## Policy Configuration (Reference)
-
-The policy files are included for reference. They would be enforced if running on a platform that supports agentsh's interception features.
-
-### Command Rules (default.yaml)
+Policy rules are loaded but only enforced when commands go through `agentsh exec`:
 
 ```yaml
 command_rules:
   - name: block-container-escape
-    commands: [sudo, su, chroot, nsenter, unshare, docker, podman]
+    commands: [sudo, su, chroot, nsenter, docker, podman]
     decision: deny
 
   - name: block-rm-recursive
     commands: [rm]
-    args_patterns: ["*-rf*", "*-r*"]
+    args_patterns: [".*-r.*", ".*--recursive.*"]
     decision: deny
 
   - name: block-network-tools
     commands: [nc, netcat, socat, telnet, ssh]
     decision: deny
-```
 
-### Network Rules (default.yaml)
-
-```yaml
 network_rules:
   - name: block-cloud-metadata
     cidrs: ["169.254.169.254/32"]
-    decision: deny
-
-  - name: block-private-networks
-    cidrs: ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
     decision: deny
 
   - name: allow-package-registries
@@ -237,29 +185,39 @@ network_rules:
     decision: allow
 ```
 
-### File Rules (default.yaml)
+## Alternatives for Full agentsh Support
 
-```yaml
-file_rules:
-  - name: approve-ssh-access
-    paths: ["${HOME}/.ssh/**"]
-    decision: approve
-    message: "Agent wants to access SSH keys"
+For full agentsh functionality (command interception, file monitoring, network filtering):
 
-  - name: soft-delete-workspace
-    paths: ["${PROJECT_ROOT}/**"]
-    operations: [delete]
-    decision: soft_delete
+### E2B (Recommended)
+
+[E2B](https://e2b.dev) sandboxes support seccomp_user_notify:
+
+```typescript
+import { Sandbox } from 'e2b'
+const sbx = await Sandbox.create('e2b-agentsh')
+// Full agentsh exec and shim work!
 ```
+
+### Docker with --privileged
+
+```bash
+docker run --privileged -it agentsh-image
+```
+
+### Full VM (EC2, GCE, etc.)
+
+Running on a full VM gives complete control over kernel features.
 
 ## Use Cases for Modal + agentsh
 
-Even with limitations, this setup can be useful for:
+Even with limitations, this setup is useful for:
 
 1. **Testing agentsh configuration** - Validate policy syntax before deploying
 2. **Daemon API development** - Test agentsh HTTP/gRPC APIs
 3. **DLP pattern testing** - Verify regex patterns for sensitive data detection
 4. **CI/CD validation** - Ensure agentsh installs and starts correctly
+5. **Session management testing** - Test session create/list/info workflows
 
 ## Troubleshooting
 
@@ -279,12 +237,12 @@ p.wait()
 print(p.stdout.read())
 ```
 
-### Verify policy loaded
+### Test session creation
 
 ```python
-p = sb.exec("cat", "/etc/agentsh/policies/default.yaml")
+p = sb.exec("agentsh", "session", "create", "--workspace", "/root", "--json")
 p.wait()
-print(p.stdout.read())
+print(p.stdout.read())  # Returns session JSON
 ```
 
 ## License
@@ -296,5 +254,5 @@ MIT License - See LICENSE file for details.
 - [agentsh](https://github.com/canyonroad/agentsh) - Runtime security for AI agents
 - [Modal](https://modal.com) - Serverless cloud platform
 - [Modal Sandboxes](https://modal.com/products/sandboxes) - Isolated container execution
-- [Modal Docs](https://modal.com/docs/guide/sandboxes) - Sandbox documentation
+- [E2B](https://e2b.dev) - Cloud sandboxes with full seccomp support
 - [gVisor](https://gvisor.dev/) - User-space kernel used by Modal for isolation

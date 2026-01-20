@@ -22,18 +22,27 @@ from pathlib import Path
 # =============================================================================
 
 AGENTSH_REPO = "canyonroad/agentsh"
-AGENTSH_TAG = "v0.7.9"
+AGENTSH_TAG = "v0.8.8"
 DEB_ARCH = "amd64"
 
 # =============================================================================
 # SECURITY TEST DEFINITIONS
 # =============================================================================
 
-# NOTE: agentsh's HTTP server is not a forward proxy - it's the control API.
-# Network filtering requires either:
-# 1. Shell shim (needs seccomp user notify) - not available on Modal
-# 2. iptables/transparent proxy (needs NET_ADMIN) - not available on Modal
-# The tests below demonstrate Modal's native isolation and agentsh's API functionality.
+# NOTE: Modal's seccomp API version doesn't support user notify at runtime,
+# even though `agentsh detect` reports it as available. This means:
+# - Shell shim doesn't work (requires seccomp_user_notify)
+# - agentsh exec doesn't work (requires seccomp_user_notify)
+# - Commands run directly through bash bypass agentsh policy
+#
+# For full agentsh functionality, use a platform with seccomp_user_notify
+# support like E2B.
+#
+# What DOES work on Modal:
+# - agentsh daemon (health, metrics, ready endpoints)
+# - Session management API
+# - Policy configuration loading
+# - Modal's native container isolation
 
 SECURITY_TESTS = {
     # =========================================================================
@@ -425,7 +434,7 @@ def main():
         # Step 2: Configure agentsh
         # -------------------------------------------------------------------------
         print("\n[2] Configuring agentsh...")
-        setup_agentsh(sb, config_yaml, default_yaml)
+        setup_agentsh(sb, config_yaml, default_yaml, use_shim=False)
         print("    agentsh configured!")
 
         # -------------------------------------------------------------------------
@@ -505,26 +514,24 @@ def main():
       ✅ Process limits (fork bomb protection)
 
     ═══════════════════════════════════════════════════════════════════
-    AGENTSH ON MODAL (limited functionality):
+    AGENTSH ON MODAL (daemon and API only):
     ═══════════════════════════════════════════════════════════════════
       ✅ Daemon runs (health, metrics, ready endpoints)
       ✅ Session management API
       ✅ Audit event logging
       ✅ Policy configuration loaded
-      ⚠️  Shell shim NOT active (seccomp unavailable)
-      ⚠️  FUSE filesystem NOT active (mount blocked)
-      ⚠️  Network interception NOT active (no CAP_NET_ADMIN)
+      ⚠️  Shell shim NOT active (seccomp_user_notify fails at runtime)
+      ⚠️  agentsh exec NOT active (same limitation)
 
     ═══════════════════════════════════════════════════════════════════
-    SECURITY GAPS ON MODAL (would be protected by full agentsh):
+    LIMITATIONS ON MODAL:
     ═══════════════════════════════════════════════════════════════════
+      ❌ Commands bypass agentsh policy (no interception)
       ❌ rm -rf and destructive commands execute freely
-      ❌ Outbound data exfiltration to any domain
-      ❌ No approval required for package installation
-      ❌ Environment variables (secrets) readable
-      ❌ Arbitrary file read/write
+      ❌ No command-level audit logging
 
-    For full protection, use agentsh on a platform with seccomp user notify support.
+    For full agentsh functionality (including command interception),
+    use a platform with seccomp_user_notify support (e.g., E2B).
 """)
 
     finally:

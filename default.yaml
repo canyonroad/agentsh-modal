@@ -406,34 +406,67 @@ command_rules:
       - /usr/bin/bash
       - /usr/bin/sh
       - ls
+      - /bin/ls
+      - /usr/bin/ls
       - cat
+      - /bin/cat
+      - /usr/bin/cat
       - head
+      - /usr/bin/head
       - tail
+      - /usr/bin/tail
       - grep
+      - /bin/grep
+      - /usr/bin/grep
       - find
+      - /usr/bin/find
       - wc
+      - /usr/bin/wc
       - sort
+      - /usr/bin/sort
       - uniq
+      - /usr/bin/uniq
       - diff
+      - /usr/bin/diff
       - pwd
+      - /bin/pwd
       - echo
+      - /bin/echo
       - date
+      - /bin/date
       - which
+      - /usr/bin/which
+      - rm
+      - /bin/rm
+      - file
+      - /usr/bin/file
     decision: allow
 
   - name: allow-dev-tools
     description: Development tools
     commands:
       - git
+      - /usr/bin/git
       - node
+      - /usr/bin/node
       - npm
+      - /usr/bin/npm
       - python
+      - /usr/bin/python
       - python3
+      - /usr/bin/python3
       - pip
+      - /usr/bin/pip
       - pip3
+      - /usr/bin/pip3
       - cargo
       - go
       - make
+      - /usr/bin/make
+      - curl
+      - /usr/bin/curl
+      - wget
+      - /usr/bin/wget
     decision: allow
 
   # ---------------------------------------------------------------------------
@@ -462,10 +495,8 @@ command_rules:
     commands:
       - rm
     args_patterns:
-      - "*-r*"
-      - "*--recursive*"
-      - "*-rf*"
-      - "*-fr*"
+      - ".*-r.*"
+      - ".*--recursive.*"
     decision: deny
     message: "Recursive delete blocked. Files can be removed individually."
 

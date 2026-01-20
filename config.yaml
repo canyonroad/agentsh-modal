@@ -1,4 +1,20 @@
 # agentsh server configuration for Modal Sandboxes
+# Generated based on: agentsh detect (run inside Modal sandbox)
+# Platform: linux
+# Security mode: full
+# Protection score: 100%
+
+# Modal sandbox capabilities detected:
+#   capabilities_drop: ✓
+#   cgroups_v2: ✓
+#   ebpf: ✓
+#   fuse: ✓
+#   seccomp: ✓
+#   seccomp_basic: ✓
+#   seccomp_user_notify: ✓ (shell shim works!)
+#   landlock: - (not available)
+#   landlock_network: - (requires kernel 6.7+)
+#   pid_namespace: -
 
 server:
   http:
@@ -14,7 +30,7 @@ auth:
   type: "none"
 
 logging:
-  level: "info"
+  level: "debug"
   format: "text"
   output: "stderr"
 
@@ -32,7 +48,7 @@ audit:
 
 sandbox:
   enabled: true
-  allow_degraded: true  # Allow running without all features
+  allow_degraded: true
 
   limits:
     max_memory_mb: 4096
@@ -40,7 +56,7 @@ sandbox:
     max_processes: 256
 
   fuse:
-    enabled: false
+    enabled: false  # Keep disabled for simplicity
 
   network:
     enabled: true
@@ -48,10 +64,10 @@ sandbox:
     proxy_listen_addr: "127.0.0.1:0"
 
   cgroups:
-    enabled: false  # Cgroup filesystem may be read-only
+    enabled: false  # May have issues in container
 
   seccomp:
-    enabled: false  # Requires privileged mode
+    enabled: false  # seccomp user notify not actually available at runtime
 
 proxy:
   mode: "embedded"
@@ -125,4 +141,4 @@ health:
 
 development:
   disable_auth: true
-  verbose_errors: false
+  verbose_errors: true
