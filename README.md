@@ -1,6 +1,6 @@
 # agentsh + Modal: Secure AI Agent Sandbox
 
-This project demonstrates integrating [agentsh](https://github.com/canyonroad/agentsh) v0.8.8 with [Modal Sandboxes](https://modal.com/products/sandboxes) for running AI agent code.
+This project demonstrates integrating [agentsh](https://github.com/canyonroad/agentsh) v0.8.10 with [Modal Sandboxes](https://modal.com/products/sandboxes) for running AI agent code.
 
 ## Important: Modal Platform Limitations
 
@@ -116,7 +116,7 @@ The test suite (`tests.py`) runs **13 tests** showing what works:
 │                   Modal Sandbox (gVisor runtime)                 │
 │                                                                  │
 │  ┌───────────────────────────────────────────────────────────┐  │
-│  │  agentsh daemon v0.8.8 (port 18080)                       │  │
+│  │  agentsh daemon v0.8.10 (port 18080)                       │  │
 │  │  • Health/ready endpoints                                 │  │
 │  │  • Metrics (Prometheus format)                            │  │
 │  │  • Session management API                                 │  │

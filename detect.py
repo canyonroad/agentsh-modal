@@ -6,7 +6,7 @@ Run agentsh detect inside a Modal sandbox to discover capabilities.
 import modal
 
 AGENTSH_REPO = "canyonroad/agentsh"
-AGENTSH_TAG = "v0.8.8"
+AGENTSH_TAG = "v0.8.10"
 DEB_ARCH = "amd64"
 
 

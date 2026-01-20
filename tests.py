@@ -31,7 +31,7 @@ from pathlib import Path
 # =============================================================================
 
 AGENTSH_REPO = "canyonroad/agentsh"
-AGENTSH_TAG = "v0.8.8"
+AGENTSH_TAG = "v0.8.10"
 DEB_ARCH = "amd64"
 
 

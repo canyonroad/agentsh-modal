@@ -69,6 +69,13 @@ sandbox:
   seccomp:
     enabled: false  # seccomp user notify not actually available at runtime
 
+  # Environment variable injection (v0.8.9+)
+  # Injects environment variables into all command execution.
+  # Primary use: BASH_ENV to disable bash builtins that bypass seccomp.
+  # Note: This would be effective if agentsh exec worked on Modal.
+  env_inject:
+    BASH_ENV: "/usr/lib/agentsh/bash_startup.sh"
+
 proxy:
   mode: "embedded"
   port: 0
