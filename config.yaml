@@ -55,8 +55,17 @@ sandbox:
     max_cpu_percent: 100
     max_processes: 256
 
+  seccomp:
+    file_monitor:
+      enabled: true
+      enforce_without_fuse: true
+      audit_under_fuse: true
+
   fuse:
-    enabled: false  # Keep disabled for simplicity
+    enabled: true
+    deferred: true
+    deferred_marker_file: "/tmp/.agentsh-fuse-enabled"
+    deferred_enable_command: ["/bin/chmod", "666", "/dev/fuse"]
 
   network:
     enabled: true
@@ -65,9 +74,6 @@ sandbox:
 
   cgroups:
     enabled: false  # May have issues in container
-
-  seccomp:
-    enabled: false  # seccomp user notify not actually available at runtime
 
   # Environment variable injection (v0.8.9+)
   # Injects environment variables into all command execution.

@@ -55,6 +55,38 @@ file_rules:
     message: "File quarantined (recoverable): {{.Path}}"
 
   # ---------------------------------------------------------------------------
+  # Modal-specific paths (container runs as root)
+  # ---------------------------------------------------------------------------
+
+  - name: allow-root-home
+    description: Allow access to root home directory (Modal workspace)
+    paths:
+      - "/root"
+      - "/root/**"
+    operations:
+      - read
+      - write
+      - create
+      - mkdir
+      - chmod
+      - rename
+      - open
+      - stat
+      - list
+      - readlink
+    decision: allow
+
+  - name: deny-delete-root-home
+    description: Deny deleting files in root home
+    paths:
+      - "/root/**"
+    operations:
+      - delete
+      - rmdir
+    decision: deny
+    message: "File deletion denied: {{.Path}}"
+
+  # ---------------------------------------------------------------------------
   # Temp directories - sandboxed
   # ---------------------------------------------------------------------------
 
@@ -290,6 +322,36 @@ network_rules:
     decision: allow
 
   # ---------------------------------------------------------------------------
+  # Code hosting platforms
+  # ---------------------------------------------------------------------------
+
+  - name: allow-github
+    description: GitHub access for git operations
+    domains:
+      - "github.com"
+      - "*.github.com"
+      - "raw.githubusercontent.com"
+      - "api.github.com"
+    ports: [443, 22]
+    decision: allow
+
+  - name: allow-gitlab
+    description: GitLab access for git operations
+    domains:
+      - "gitlab.com"
+      - "*.gitlab.com"
+    ports: [443, 22]
+    decision: allow
+
+  - name: allow-bitbucket
+    description: Bitbucket access for git operations
+    domains:
+      - "bitbucket.org"
+      - "*.bitbucket.org"
+    ports: [443, 22]
+    decision: allow
+
+  # ---------------------------------------------------------------------------
   # Embedded LLM Proxy
   # ---------------------------------------------------------------------------
 
@@ -383,14 +445,26 @@ network_rules:
 command_rules:
   # ---------------------------------------------------------------------------
   # Allow curl/wget - network rules will block malicious domains
+  # v0.8.1: context field enables depth-aware policy enforcement
   # ---------------------------------------------------------------------------
 
-  - name: allow-network-tools
-    description: Allow curl/wget (network rules enforce domain policy)
+  - name: allow-network-tools-direct
+    description: Allow curl/wget when invoked directly (not nested in scripts)
     commands:
       - curl
       - wget
+    context: [direct]
     decision: allow
+
+  - name: approve-network-tools-nested
+    description: Require approval for curl/wget invoked from nested scripts
+    commands:
+      - curl
+      - wget
+    context: [nested]
+    decision: approve
+    message: "Nested script wants to fetch: {{.Args}}"
+    timeout: 2m
 
   # ---------------------------------------------------------------------------
   # Allow safe commands
@@ -546,6 +620,62 @@ command_rules:
     message: "Container escape attempt blocked: {{.Command}}"
 
   # ---------------------------------------------------------------------------
+  # Git safety rules (v0.7.10) - prevent destructive git operations
+  # ---------------------------------------------------------------------------
+
+  - name: block-git-force-push
+    description: Block force pushing (prevents history rewriting)
+    commands:
+      - git
+    args_patterns:
+      - "push.*(--force|-f)"
+    decision: deny
+    message: "Force pushing is blocked. Use standard merge workflow instead."
+
+  - name: block-git-push-main
+    description: Block direct pushes to main/master branches
+    commands:
+      - git
+    args_patterns:
+      - "push.*(origin\\s+)?(main|master)"
+    decision: deny
+    message: "Direct push to main/master blocked. Use pull requests instead."
+
+  - name: block-git-reset-hard
+    description: Block hard resets (prevents data loss)
+    commands:
+      - git
+    args_patterns:
+      - "reset.*--hard"
+    decision: deny
+    message: "Hard reset blocked. Use 'git stash' or 'git checkout' instead."
+
+  - name: block-git-clean-force
+    description: Block forced clean (prevents untracked file deletion)
+    commands:
+      - git
+    args_patterns:
+      - "clean.*-f"
+    decision: deny
+    message: "Forced clean blocked. Review untracked files manually."
+
+  # ---------------------------------------------------------------------------
+  # v0.8.9: Block bash builtins that can bypass seccomp protections
+  # ---------------------------------------------------------------------------
+
+  - name: block-bash-builtins
+    description: Block bash builtins that bypass seccomp (v0.8.9)
+    commands:
+      - kill
+      - enable
+      - ulimit
+      - umask
+      - builtin
+      - command
+    decision: deny
+    message: "Bash builtin '{{.Command}}' blocked (bypasses seccomp protections)"
+
+  # ---------------------------------------------------------------------------
   # Allow all other commands (security enforced via file/network rules)
   # ---------------------------------------------------------------------------
 
@@ -582,3 +712,48 @@ audit:
   include_stderr: true
   include_file_content: false
   retention_days: 90
+
+# =============================================================================
+# ENVIRONMENT VARIABLE POLICY
+# =============================================================================
+
+env_policy:
+  # Allowlist - only these vars pass through (glob patterns supported)
+  allow:
+    - "HOME"
+    - "PATH"
+    - "USER"
+    - "SHELL"
+    - "TERM"
+    - "LANG"
+    - "LC_*"
+    - "TZ"
+    - "PWD"
+    - "OLDPWD"
+    - "HOSTNAME"
+    - "HTTPS_PROXY"
+    - "HTTP_PROXY"
+    - "NO_PROXY"
+    - "AGENTSH_*"
+    # Development tools
+    - "NODE_ENV"
+    - "GOPATH"
+    - "CARGO_HOME"
+    - "RUSTUP_HOME"
+    # Modal workspace
+    - "MODAL_*"
+
+  # Denylist - always blocked (in addition to default secrets)
+  deny:
+    - "*_SECRET*"
+    - "*_TOKEN"
+    - "*_KEY"
+    - "*_PASSWORD"
+    - "DATABASE_URL"
+
+  # Limits
+  max_bytes: 65536
+  max_keys: 100
+
+  # Block env/printenv enumeration commands
+  block_iteration: true

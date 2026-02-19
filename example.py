@@ -22,7 +22,7 @@ from pathlib import Path
 # =============================================================================
 
 AGENTSH_REPO = "canyonroad/agentsh"
-AGENTSH_TAG = "v0.8.10"
+AGENTSH_TAG = "v0.10.0"
 DEB_ARCH = "amd64"
 
 # =============================================================================
@@ -304,6 +304,7 @@ def create_agentsh_image() -> modal.Image:
             "git",
             "sudo",
             "libseccomp2",
+            "fuse3",
         )
         .run_commands(
             # Download and install agentsh
