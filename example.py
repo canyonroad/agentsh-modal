@@ -2,10 +2,7 @@
 """
 agentsh + Modal Sandbox Security Demo
 
-This script demonstrates the security features of agentsh running in a Modal Sandbox.
-It creates a sandbox with agentsh installed, configures the shell shim, and runs
-comprehensive security tests covering AI agent protection, cloud infrastructure
-security, and multi-tenant isolation.
+Demonstrates agentsh security features running in a Modal Sandbox.
 
 Prerequisites:
     pip install modal
@@ -22,27 +19,16 @@ from pathlib import Path
 # =============================================================================
 
 AGENTSH_REPO = "canyonroad/agentsh"
-AGENTSH_TAG = "v0.10.0"
+AGENTSH_TAG = "v0.14.0"
 DEB_ARCH = "amd64"
 
 # =============================================================================
 # SECURITY TEST DEFINITIONS
 # =============================================================================
 
-# NOTE: Modal's seccomp API version doesn't support user notify at runtime,
-# even though `agentsh detect` reports it as available. This means:
-# - Shell shim doesn't work (requires seccomp_user_notify)
-# - agentsh exec doesn't work (requires seccomp_user_notify)
-# - Commands run directly through bash bypass agentsh policy
-#
-# For full agentsh functionality, use a platform with seccomp_user_notify
-# support like E2B.
-#
-# What DOES work on Modal:
-# - agentsh daemon (health, metrics, ready endpoints)
-# - Session management API
-# - Policy configuration loading
-# - Modal's native container isolation
+# NOTE: Modal's gVisor runtime blocks seccomp_user_notify and FUSE mounts,
+# so agentsh runs in daemon+API mode. Shell shim and file enforcement are
+# configured but not enforced. See README.md for details.
 
 SECURITY_TESTS = {
     # =========================================================================
@@ -505,34 +491,28 @@ def main():
     Tests failed: {results['failed']}
     Errors:       {results['errors']}
 
-    ═══════════════════════════════════════════════════════════════════
-    MODAL NATIVE PROTECTION (works without agentsh):
-    ═══════════════════════════════════════════════════════════════════
-      ✅ Cloud metadata blocked (169.254.169.254)
-      ✅ Container isolation (separate namespaces)
-      ✅ No Docker socket access
-      ✅ No host filesystem access
-      ✅ Process limits (fork bomb protection)
+    MODAL NATIVE PROTECTION:
+      - Cloud metadata blocked (169.254.169.254)
+      - Container isolation (separate namespaces)
+      - No Docker socket access
+      - No host filesystem access
+      - Process limits (fork bomb protection)
 
-    ═══════════════════════════════════════════════════════════════════
-    AGENTSH ON MODAL (daemon and API only):
-    ═══════════════════════════════════════════════════════════════════
-      ✅ Daemon runs (health, metrics, ready endpoints)
-      ✅ Session management API
-      ✅ Audit event logging
-      ✅ Policy configuration loaded
-      ⚠️  Shell shim NOT active (seccomp_user_notify fails at runtime)
-      ⚠️  agentsh exec NOT active (same limitation)
+    AGENTSH {AGENTSH_TAG} ON MODAL:
+      Working:
+        - Daemon (health, metrics, ready endpoints)
+        - Session management API
+        - MCP API endpoints (v0.11.0)
+        - Audit event logging
+        - Policy configuration loaded
 
-    ═══════════════════════════════════════════════════════════════════
-    LIMITATIONS ON MODAL:
-    ═══════════════════════════════════════════════════════════════════
-      ❌ Commands bypass agentsh policy (no interception)
-      ❌ rm -rf and destructive commands execute freely
-      ❌ No command-level audit logging
+      Not enforced (gVisor limitations):
+        - Shell shim / agentsh exec (seccomp_user_notify)
+        - FUSE file enforcement (mount denied)
+        - Command blocking (sudo, su, kill)
 
-    For full agentsh functionality (including command interception),
-    use a platform with seccomp_user_notify support (e.g., E2B).
+    For full enforcement, use a platform with
+    seccomp_user_notify + FUSE support (e.g., Daytona).
 """)
 
     finally:
