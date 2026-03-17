@@ -92,10 +92,10 @@ The ptrace tracer attaches to child processes and intercepts syscalls:
 
 ### Full Protection via ptrace
 
-On Daytona and E2B, agentsh uses FUSE for file control and seccomp for network filtering. Modal's gVisor kernel doesn't support FUSE or seccomp user-notify — but ptrace provides **equivalent protection** by intercepting the same syscalls at the tracer level:
+On platforms with full kernel access, agentsh uses FUSE for file control and seccomp for network filtering. Modal's gVisor kernel doesn't support FUSE or seccomp user-notify — but ptrace provides **equivalent protection** by intercepting the same syscalls at the tracer level:
 
-| Protection | Daytona / E2B | Modal (ptrace) |
-|------------|---------------|----------------|
+| Protection | FUSE / seccomp | Modal (ptrace) |
+|------------|----------------|----------------|
 | File reads/writes | FUSE (openat) | ptrace (openat) |
 | Command execution | Shell shim (execve) | ptrace (execve) |
 | DNS filtering | seccomp (connect) | ptrace (connect/sendto) |
@@ -154,25 +154,21 @@ modal run tests.py
 
 ## Platform Status
 
-| Feature | Modal (v0.16.1) | Daytona | Notes |
-|---------|-----------------|---------|-------|
-| agentsh daemon | Working | Working | -- |
-| Session management | Working | Working | -- |
-| DNS domain filtering | **Working** (ptrace) | Working (seccomp) | Domain-name allow/deny |
-| DNS redirect | **Working** (ptrace) | Working | -- |
-| Command blocking | **Working** (ptrace execve) | Working (shell shim) | sudo, docker, nsenter |
-| File access control | **Working** (ptrace openat) | Working (FUSE) | Workspace allowed, /etc denied |
-| Network CIDR blocking | Working | Working | -- |
-| DLP / audit | Working | Working | -- |
-| MCP API | Working | Working | -- |
-| FUSE file enforcement | Not needed | Working | Replaced by ptrace openat |
-| Shell shim | Not needed | Working | Replaced by ptrace execve |
+| Feature | Status | Mechanism |
+|---------|--------|-----------|
+| agentsh daemon | Working | HTTP API |
+| Session management | Working | -- |
+| DNS domain filtering | **Working** | ptrace connect/sendto + DNS proxy |
+| DNS redirect | **Working** | ptrace DNS proxy |
+| Command blocking | **Working** | ptrace execve |
+| File access control | **Working** | ptrace openat |
+| Network CIDR blocking | Working | ptrace connect |
+| DLP / audit | Working | LLM proxy |
+| MCP API | Working | -- |
 
 ## Related Projects
 
 - [agentsh](https://github.com/canyonroad/agentsh) -- Runtime security for AI agents ([docs](https://www.agentsh.org/docs/))
-- [agentsh + Daytona](https://github.com/canyonroad/daytona-test) -- agentsh integration with Daytona sandboxes
-- [agentsh + E2B](https://github.com/canyonroad/e2b-agentsh) -- agentsh integration with E2B sandboxes
 
 ## License
 
