@@ -90,6 +90,29 @@ The ptrace tracer attaches to child processes and intercepts syscalls:
 - **openat** — file access control (workspace allowed, /etc writes denied)
 - **connect/sendto** — network filtering with built-in DNS proxy for domain-based allow/deny
 
+### Full Protection via ptrace
+
+On Daytona and E2B, agentsh uses FUSE for file control and seccomp for network filtering. Modal's gVisor kernel doesn't support FUSE or seccomp user-notify — but ptrace provides **equivalent protection** by intercepting the same syscalls at the tracer level:
+
+| Protection | Daytona / E2B | Modal (ptrace) |
+|------------|---------------|----------------|
+| File reads/writes | FUSE (openat) | ptrace (openat) |
+| Command execution | Shell shim (execve) | ptrace (execve) |
+| DNS filtering | seccomp (connect) | ptrace (connect/sendto) |
+| Network blocking | seccomp (connect) | ptrace (connect) |
+
+Running `modal run detect.py` verifies all protections work on gVisor:
+
+```
+  ptrace enforcement:   SUPPORTED
+  raw DNS resolution:   OK
+  DNS allow (github):   OK        # github.com resolves
+  DNS block (evil.com): OK        # evil.com → NXDOMAIN
+  file allow (workspace): OK      # write /root/test.txt → success
+  file deny (write /etc): OK      # write /etc/hack → EACCES
+  file deny (read proc):  OK      # read /proc/1/environ → EACCES
+```
+
 ## Configuration
 
 Security policy is defined in two files:
@@ -107,7 +130,7 @@ agentsh-modal/
 ├── default.yaml        # Security policy (commands, network, files, DNS redirects, env)
 ├── tests.py            # Full security test suite (ptrace enforcement)
 ├── example.py          # Demo showing Modal + agentsh capabilities
-├── detect.py           # Runs agentsh detect with diagnostics
+├── detect.py           # Ptrace probe + DNS + file access control verification
 ├── detect_docker.py    # Detection with enable_docker runtime option
 └── detect_dind.py      # Detection with Docker-in-Docker setup
 ```
