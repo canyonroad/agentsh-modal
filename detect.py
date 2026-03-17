@@ -4,7 +4,8 @@ Functional ptrace probe inside a Modal sandbox.
 
 Verifies that PTRACE_SEIZE (used by agentsh v0.16.1 attach_mode: "children")
 actually works, not just that capabilities are advertised.
-Also tests DNS resolution and blocking through agentsh's ptrace DNS proxy.
+Also tests DNS resolution/blocking and file access control through agentsh's
+ptrace-based syscall interception (DNS proxy + openat).
 """
 
 import modal
@@ -296,8 +297,42 @@ def main():
                 or "could not resolve" in deny_output
                 or "refused" in deny_output
             )
+
+            # --- 4e. File access control (ptrace openat interception) ---
+            print("\n" + "=" * 60)
+            print("  File access control (ptrace openat)")
+            print("=" * 60)
+
+            file_allow_ok = False
+            file_deny_write_ok = False
+            file_deny_read_ok = False
+
+            # ALLOW: write to workspace (/root)
+            fa_out, _, fa_rc = run(
+                f"agentsh exec {session_id} -- "
+                "sh -c \"echo 'hello from agent' > /root/test.txt && cat /root/test.txt\" 2>&1",
+                "agentsh exec: write+read /root/test.txt (ALLOWED)",
+            )
+            file_allow_ok = fa_rc == 0 and "hello from agent" in fa_out
+
+            # DENY: write to /etc
+            fd_out, _, fd_rc = run(
+                f"agentsh exec {session_id} -- "
+                "python3 -c \"open('/etc/hack','w').write('pwned')\" 2>&1",
+                "agentsh exec: write /etc/hack (DENIED)",
+            )
+            file_deny_write_ok = fd_rc != 0 or "denied" in fd_out.lower() or "permission" in fd_out.lower()
+
+            # DENY: read sensitive proc
+            fp_out, _, fp_rc = run(
+                f"agentsh exec {session_id} -- "
+                "cat /proc/1/environ 2>&1",
+                "agentsh exec: read /proc/1/environ (DENIED)",
+            )
+            file_deny_read_ok = fp_rc != 0 or "denied" in fp_out.lower() or "permission" in fp_out.lower()
+
         else:
-            print("    No session — skipping agentsh exec DNS tests")
+            print("    No session — skipping agentsh exec tests")
 
         # --- 5. Summary ---
         print("\n" + "=" * 60)
@@ -307,6 +342,9 @@ def main():
         if session_id:
             print(f"  DNS allow (github):   {'OK' if dns_allow_ok else 'FAIL'}")
             print(f"  DNS block (evil.com): {'OK' if dns_block_ok else 'FAIL'}")
+            print(f"  file allow (workspace): {'OK' if file_allow_ok else 'FAIL'}")
+            print(f"  file deny (write /etc): {'OK' if file_deny_write_ok else 'FAIL'}")
+            print(f"  file deny (read proc):  {'OK' if file_deny_read_ok else 'FAIL'}")
         print("=" * 60)
 
     finally:
