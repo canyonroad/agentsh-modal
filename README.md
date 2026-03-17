@@ -1,6 +1,6 @@
 # agentsh + Modal
 
-Runtime security governance for AI agents using [agentsh](https://github.com/canyonroad/agentsh) v0.14.0 with [Modal Sandboxes](https://modal.com/products/sandboxes).
+Runtime security governance for AI agents using [agentsh](https://github.com/canyonroad/agentsh) v0.16.1 with [Modal Sandboxes](https://modal.com/products/sandboxes).
 
 ## Why agentsh + Modal?
 
@@ -24,9 +24,9 @@ agentsh adds the governance layer that controls what agents can do inside the sa
 |  |  agentsh (Governance)                             |  |
 |  |  +---------------------------------------------+  |  |
 |  |  |  AI Agent                                   |  |  |
-|  |  |  - Commands are policy-checked              |  |  |
-|  |  |  - Network requests are filtered            |  |  |
-|  |  |  - File I/O is intercepted (FUSE)           |  |  |
+|  |  |  - DNS queries filtered by domain name      |  |  |
+|  |  |  - Commands intercepted (ptrace execve)     |  |  |
+|  |  |  - File I/O intercepted (ptrace openat)     |  |  |
 |  |  |  - Secrets are redacted from output         |  |  |
 |  |  |  - All actions are audited                  |  |  |
 |  |  +---------------------------------------------+  |  |
@@ -38,14 +38,15 @@ agentsh adds the governance layer that controls what agents can do inside the sa
 
 | Modal Provides | agentsh Adds |
 |----------------|--------------|
-| Compute isolation (gVisor) | Command blocking (shell shim) |
-| Process sandboxing | File I/O policy (FUSE) |
-| Sandbox API | Domain allowlist/blocklist |
+| Compute isolation (gVisor) | DNS domain-name filtering (ptrace) |
+| Process sandboxing | Command blocking (ptrace execve) |
+| Sandbox API | File access control (ptrace openat) |
 | Cloud metadata blocking | Environment variable filtering |
 | | Secret detection and redaction (DLP) |
-| | MCP tool call security (v0.11.0) |
-| | Threat intelligence feeds (v0.12.0) |
-| | Package install scanning (v0.12.0) |
+| | DNS redirect rules |
+| | MCP tool call security |
+| | Threat intelligence feeds |
+| | Package install scanning |
 | | LLM request auditing |
 | | Complete audit logging |
 
@@ -64,7 +65,7 @@ modal run example.py
 
 ## How It Works
 
-Modal sandboxes use [gVisor](https://gvisor.dev/), a user-space application kernel. gVisor blocks the two kernel features agentsh needs for full enforcement (FUSE mounts and `seccomp_user_notify`), so agentsh runs in **daemon + API mode**:
+Modal sandboxes use [gVisor](https://gvisor.dev/), a user-space application kernel. Previous versions of agentsh required FUSE mounts and `seccomp_user_notify` which gVisor blocks. **v0.16.1 introduces ptrace-based enforcement** which works natively on gVisor:
 
 ```
 modal.Sandbox.create()
@@ -75,25 +76,26 @@ modal.Sandbox.create()
 |  (policy engine)  |  Session mgmt, audit, DLP
 +--------+----------+
          |
-   +-----+-----+
-   v             v
-Working:       Config loaded,
-  Health API     not enforced:
-  Sessions       FUSE file blocking
-  MCP API        Shell shim
-  Audit log      Command blocking
-  DLP            agentsh exec
-  Network proxy
+   ptrace tracer
+   (v0.16.1)
+         |
+   +-----+------+
+   v      v      v
+ execve  openat  connect/sendto
+ (cmds)  (files) (network + DNS)
 ```
 
-The daemon starts, loads all policy configuration, and provides API endpoints. Features requiring FUSE or `seccomp_user_notify` are configured but cannot enforce until Modal enables those gVisor capabilities.
+The ptrace tracer attaches to child processes and intercepts syscalls:
+- **execve** — command allow/deny (blocks sudo, docker, nsenter, etc.)
+- **openat** — file access control (workspace allowed, /etc writes denied)
+- **connect/sendto** — network filtering with built-in DNS proxy for domain-based allow/deny
 
 ## Configuration
 
 Security policy is defined in two files:
 
-- **`config.yaml`** -- Server configuration: network interception, [DLP patterns](https://www.agentsh.org/docs/#llm-proxy), LLM proxy, [FUSE settings](https://www.agentsh.org/docs/#fuse), [MCP security](https://www.agentsh.org/docs/#mcp), [env_inject](https://www.agentsh.org/docs/#shell-shim)
-- **`default.yaml`** -- [Policy rules](https://www.agentsh.org/docs/#policy-reference): [command rules](https://www.agentsh.org/docs/#command-rules), [network rules](https://www.agentsh.org/docs/#network-rules), [file rules](https://www.agentsh.org/docs/#file-rules), [environment policy](https://www.agentsh.org/docs/#environment-policy)
+- **`config.yaml`** -- Server configuration: ptrace settings, network interception, [DLP patterns](https://www.agentsh.org/docs/#llm-proxy), LLM proxy, [MCP security](https://www.agentsh.org/docs/#mcp), [env_inject](https://www.agentsh.org/docs/#shell-shim)
+- **`default.yaml`** -- [Policy rules](https://www.agentsh.org/docs/#policy-reference): [command rules](https://www.agentsh.org/docs/#command-rules), [network rules](https://www.agentsh.org/docs/#network-rules), [file rules](https://www.agentsh.org/docs/#file-rules), DNS redirects, [environment policy](https://www.agentsh.org/docs/#environment-policy)
 
 See the [agentsh documentation](https://www.agentsh.org/docs/) for the full policy reference.
 
@@ -101,9 +103,9 @@ See the [agentsh documentation](https://www.agentsh.org/docs/) for the full poli
 
 ```
 agentsh-modal/
-├── config.yaml         # Server config (FUSE, DLP, MCP, network, threat feeds)
-├── default.yaml        # Security policy (commands, network, files, env)
-├── tests.py            # Full security test suite (mirrors Daytona tests)
+├── config.yaml         # Server config (ptrace, DLP, MCP, network, threat feeds)
+├── default.yaml        # Security policy (commands, network, files, DNS redirects, env)
+├── tests.py            # Full security test suite (ptrace enforcement)
 ├── example.py          # Demo showing Modal + agentsh capabilities
 ├── detect.py           # Runs agentsh detect with diagnostics
 ├── detect_docker.py    # Detection with enable_docker runtime option
@@ -114,14 +116,13 @@ agentsh-modal/
 
 The `tests.py` script creates a Modal sandbox and runs security tests across these categories:
 
-- **Daemon & API** -- Health, ready, metrics endpoints
-- **Session management** -- Create, info, list sessions
-- **Allowed operations** -- whoami, id, ls, git, python
-- **Modal native isolation** -- Metadata blocked, no docker socket, no host filesystem
-- **MCP API** -- Tools and servers endpoints (v0.11.0)
-- **File access** -- Workspace/tmp writes allowed; /etc, /usr/bin writes not blocked (needs FUSE)
-- **Network blocking** -- Proxy-based domain filtering
-- **Command blocking** -- sudo, su, kill not blocked (needs shell shim)
+- **Daemon & API** -- Health, ready, metrics, session management
+- **Version verification** -- Confirm v0.16.1 with ptrace active
+- **DNS domain-name filtering** -- Allow github.com/pypi.org, deny evil.com (by name!)
+- **DNS redirect** -- redirectme.example.com → 127.0.0.1
+- **Command blocking** -- sudo, docker, nsenter denied; ls, git, python allowed
+- **File access control** -- Workspace/tmp writes allowed; /etc, /usr/bin writes denied
+- **Network CIDR blocking** -- Private networks and metadata IPs denied
 - **Audit logs** -- SQLite database and server log active
 
 ```bash
@@ -130,27 +131,19 @@ modal run tests.py
 
 ## Platform Status
 
-| Feature | Modal | Daytona | Blocker |
-|---------|-------|---------|---------|
+| Feature | Modal (v0.16.1) | Daytona | Notes |
+|---------|-----------------|---------|-------|
 | agentsh daemon | Working | Working | -- |
 | Session management | Working | Working | -- |
-| MCP API (v0.11.0) | Working | Working | -- |
-| Network proxy | Working | Working | -- |
+| DNS domain filtering | **Working** (ptrace) | Working (seccomp) | Domain-name allow/deny |
+| DNS redirect | **Working** (ptrace) | Working | -- |
+| Command blocking | **Working** (ptrace execve) | Working (shell shim) | sudo, docker, nsenter |
+| File access control | **Working** (ptrace openat) | Working (FUSE) | Workspace allowed, /etc denied |
+| Network CIDR blocking | Working | Working | -- |
 | DLP / audit | Working | Working | -- |
-| FUSE file enforcement | Not working | Working | gVisor blocks `mount()` |
-| Shell shim | Not working | Working | gVisor blocks `seccomp_user_notify` |
-| Command blocking | Not working | Working | Needs shell shim |
-| agentsh exec | Not working | Working | Needs `seccomp_user_notify` |
-
-## For Modal Engineers
-
-Two gVisor capabilities would unlock full agentsh enforcement on Modal:
-
-1. **FUSE mounts** -- `/dev/fuse` exists and opens, but `mount()` returns `EPERM`. Enabling FUSE would unlock VFS-level file policy enforcement (block writes to `/etc`, `/usr/bin`, quarantine, audit).
-
-2. **`seccomp_user_notify`** -- `seccomp(SECCOMP_GET_NOTIF_SIZES)` returns `EINVAL`. Enabling this would unlock the shell shim, command blocking, `agentsh exec`, path canonicalization (v0.14.0), and transparent command unwrapping (v0.14.0).
-
-Both are [supported by gVisor](https://gvisor.dev/docs/user_guide/compatibility/linux/amd64/) but appear disabled in Modal's configuration. With both enabled, Modal would achieve parity with the [Daytona integration](https://github.com/canyonroad/daytona-test) where all 50+ security tests pass.
+| MCP API | Working | Working | -- |
+| FUSE file enforcement | Not needed | Working | Replaced by ptrace openat |
+| Shell shim | Not needed | Working | Replaced by ptrace execve |
 
 ## Related Projects
 

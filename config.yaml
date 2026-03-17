@@ -1,5 +1,5 @@
 # agentsh server configuration for Modal Sandboxes
-# agentsh v0.14.0
+# agentsh v0.16.1
 
 server:
   http:
@@ -41,14 +41,21 @@ sandbox:
     max_cpu_percent: 100
     max_processes: 256
 
-  seccomp:
-    file_monitor:
-      enabled: true
-      enforce_without_fuse: true
-      audit_under_fuse: true
-    enforced_redirects: true  # v0.13.0
-    transparent_commands:     # v0.14.0
-      add: ["time", "timeout"]
+  # v0.16.1: ptrace-based enforcement (works on gVisor/Modal)
+  ptrace:
+    enabled: true
+    attach_mode: "children"
+    mask_tracer_pid: "off"
+    trace:
+      execve: true
+      file: true
+      network: true
+      signal: true
+    performance:
+      seccomp_prefilter: false   # gVisor doesn't support seccomp BPF injection
+      max_tracees: 500
+      max_hold_ms: 5000
+    on_attach_failure: "fail_open"
 
   fuse:
     enabled: true
@@ -63,6 +70,9 @@ sandbox:
 
   cgroups:
     enabled: false
+
+  unix_sockets:
+    enabled: false  # mutually exclusive with ptrace
 
   env_inject:
     BASH_ENV: "/usr/lib/agentsh/bash_startup.sh"

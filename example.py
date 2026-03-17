@@ -19,16 +19,16 @@ from pathlib import Path
 # =============================================================================
 
 AGENTSH_REPO = "canyonroad/agentsh"
-AGENTSH_TAG = "v0.14.0"
+AGENTSH_TAG = "v0.16.1"
 DEB_ARCH = "amd64"
 
 # =============================================================================
 # SECURITY TEST DEFINITIONS
 # =============================================================================
 
-# NOTE: Modal's gVisor runtime blocks seccomp_user_notify and FUSE mounts,
-# so agentsh runs in daemon+API mode. Shell shim and file enforcement are
-# configured but not enforced. See README.md for details.
+# NOTE: agentsh v0.16.1 uses ptrace-based enforcement which works on
+# gVisor/Modal. This provides DNS domain filtering, command blocking,
+# and file access control without needing seccomp_user_notify or FUSE.
 
 SECURITY_TESTS = {
     # =========================================================================
@@ -498,21 +498,20 @@ def main():
       - No host filesystem access
       - Process limits (fork bomb protection)
 
-    AGENTSH {AGENTSH_TAG} ON MODAL:
+    AGENTSH {AGENTSH_TAG} ON MODAL (ptrace mode):
       Working:
         - Daemon (health, metrics, ready endpoints)
         - Session management API
-        - MCP API endpoints (v0.11.0)
+        - DNS domain-name filtering (allow/deny by name)
+        - Command blocking (ptrace execve interception)
+        - File access control (ptrace openat interception)
+        - Network CIDR blocking
+        - MCP API endpoints
         - Audit event logging
         - Policy configuration loaded
 
-      Not enforced (gVisor limitations):
-        - Shell shim / agentsh exec (seccomp_user_notify)
-        - FUSE file enforcement (mount denied)
-        - Command blocking (sudo, su, kill)
-
-    For full enforcement, use a platform with
-    seccomp_user_notify + FUSE support (e.g., Daytona).
+    ptrace mode replaces seccomp+FUSE, which were blocked by gVisor.
+    Domain-name DNS filtering is now enforced on Modal for the first time.
 """)
 
     finally:

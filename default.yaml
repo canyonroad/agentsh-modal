@@ -9,6 +9,17 @@ description: |
   container escape, and credential leakage.
 
 # =============================================================================
+# DNS REDIRECT RULES (v0.16.1)
+# =============================================================================
+
+dns_redirects:
+  - name: redirect-test
+    match: "redirectme\\.example\\.com"
+    resolve_to: "127.0.0.1"
+    visibility: "audit_only"
+    on_failure: "fail_closed"
+
+# =============================================================================
 # FILE OPERATION RULES
 # =============================================================================
 
@@ -142,6 +153,7 @@ file_rules:
   - name: allow-system-read
     description: Read access to system paths
     paths:
+      - "/"
       - "/usr/**"
       - "/lib/**"
       - "/lib64/**"
@@ -156,16 +168,59 @@ file_rules:
     decision: allow
 
   - name: allow-etc-minimal
-    description: Read minimal config files
+    description: Read minimal config files needed by system commands
     paths:
       - "/etc/hosts"
       - "/etc/resolv.conf"
-      - "/etc/ssl/certs/**"
+      - "/etc/ssl/**"
       - "/etc/ca-certificates/**"
       - "/etc/localtime"
+      - "/etc/passwd"
+      - "/etc/group"
+      - "/etc/nsswitch.conf"
+      - "/etc/ld.so.cache"
+      - "/etc/ld.so.conf"
+      - "/etc/ld.so.conf.d/**"
+      - "/etc/gai.conf"
+      - "/etc/host.conf"
+      - "/etc/login.defs"
     operations:
       - read
+      - open
       - stat
+      - list
+      - readlink
+    decision: allow
+
+  - name: allow-dev-devices
+    description: Allow access to standard device files
+    paths:
+      - "/dev/null"
+      - "/dev/zero"
+      - "/dev/urandom"
+      - "/dev/random"
+      - "/dev/stdin"
+      - "/dev/stdout"
+      - "/dev/stderr"
+      - "/dev/fd/**"
+    operations:
+      - read
+      - write
+      - open
+      - stat
+    decision: allow
+
+  - name: allow-proc-self
+    description: Allow process to read its own proc info
+    paths:
+      - "/proc/self/**"
+      - "/proc/version"
+    operations:
+      - read
+      - open
+      - stat
+      - list
+      - readlink
     decision: allow
 
   # ---------------------------------------------------------------------------
