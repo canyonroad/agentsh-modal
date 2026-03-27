@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-agentsh v0.16.1 + Modal Sandbox Security Tests
+agentsh v0.16.8 + Modal Sandbox Security Tests
 
 Comprehensive tests for ptrace-based enforcement on Modal's gVisor runtime.
 Key demonstration: domain-name DNS filtering (not just IP-based blocking).
@@ -20,7 +20,7 @@ from pathlib import Path
 # =============================================================================
 
 AGENTSH_REPO = "canyonroad/agentsh"
-AGENTSH_TAG = "v0.16.1"
+AGENTSH_TAG = "v0.16.8"
 DEB_ARCH = "amd64"
 
 # Modal runs as root; workspace is /root
@@ -51,11 +51,11 @@ def create_agentsh_image() -> modal.Image:
             "dnsutils",
         )
         .run_commands(
+            "echo 'rebuilt: 2026-03-27T2'",  # cache bust BEFORE download to force re-fetch
             f"curl -fsSL -L '{deb_url}' -o /tmp/agentsh.deb",
             "dpkg -i /tmp/agentsh.deb",
             "rm -f /tmp/agentsh.deb",
             "agentsh --version",
-            "echo 'rebuilt: 2026-03-16T3'",  # cache bust for re-released v0.16.1
             "mkdir -p /etc/agentsh/policies /var/lib/agentsh/quarantine /var/lib/agentsh/sessions /var/log/agentsh",
             "chmod 777 /etc/agentsh /etc/agentsh/policies",
             "chmod 777 /var/lib/agentsh /var/lib/agentsh/quarantine /var/lib/agentsh/sessions",
@@ -305,7 +305,7 @@ def main():
             # Test basic exec works
             run_exec_test(sb, session_id, results,
                           "agentsh exec echo — basic exec works",
-                          "echo 'hello from ptrace'")
+                          "sh -c \"echo 'hello from ptrace'\"")
 
             run_exec_test(sb, session_id, results,
                           "agentsh exec ls / — list root",
@@ -441,12 +441,12 @@ def main():
                           "python3 --version")
 
             run_exec_test(sb, session_id, results,
-                          "echo hello \u2014 ALLOWED",
-                          "/bin/echo hello")
+                          "echo hello — ALLOWED",
+                          "sh -c 'echo hello'")
 
             run_exec_test(sb, session_id, results,
-                          "whoami \u2014 ALLOWED",
-                          "whoami")
+                          "whoami — ALLOWED",
+                          "/usr/bin/whoami")
         else:
             results["failed"] += 9
             print("    \u2717 Skipping command tests (no session)")
@@ -467,8 +467,8 @@ def main():
                           f"sh -c \"echo 'test data' > {WORKSPACE}/test_write.txt && cat {WORKSPACE}/test_write.txt\"")
 
             run_exec_test(sb, session_id, results,
-                          "Read /etc/hosts \u2014 ALLOWED (minimal config read)",
-                          "cat /etc/hosts")
+                          "Read /etc/hosts — ALLOWED (minimal config read)",
+                          "/usr/bin/cat /etc/hosts")
 
             run_exec_test(sb, session_id, results,
                           "Write to /tmp \u2014 ALLOWED",

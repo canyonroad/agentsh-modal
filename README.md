@@ -1,6 +1,6 @@
 # agentsh + Modal
 
-Runtime security governance for AI agents using [agentsh](https://github.com/canyonroad/agentsh) v0.16.1 with [Modal Sandboxes](https://modal.com/products/sandboxes).
+Runtime security governance for AI agents using [agentsh](https://github.com/canyonroad/agentsh) v0.16.8 with [Modal Sandboxes](https://modal.com/products/sandboxes).
 
 ## Why agentsh + Modal?
 
@@ -65,7 +65,7 @@ modal run example.py
 
 ## How It Works
 
-Modal sandboxes use [gVisor](https://gvisor.dev/), a user-space application kernel. Previous versions of agentsh required FUSE mounts and `seccomp_user_notify` which gVisor blocks. **v0.16.1 introduces ptrace-based enforcement** which works natively on gVisor:
+Modal sandboxes use [gVisor](https://gvisor.dev/), a user-space application kernel. Previous versions of agentsh required FUSE mounts and `seccomp_user_notify` which gVisor blocks. **agentsh v0.16+ uses ptrace-based enforcement** which works natively on gVisor:
 
 ```
 modal.Sandbox.create()
@@ -77,7 +77,7 @@ modal.Sandbox.create()
 +--------+----------+
          |
    ptrace tracer
-   (v0.16.1)
+   (v0.16.8)
          |
    +-----+------+
    v      v      v
@@ -140,7 +140,7 @@ agentsh-modal/
 The `tests.py` script creates a Modal sandbox and runs security tests across these categories:
 
 - **Daemon & API** -- Health, ready, metrics, session management
-- **Version verification** -- Confirm v0.16.1 with ptrace active
+- **Version verification** -- Confirm v0.16.8 with ptrace active
 - **DNS domain-name filtering** -- Allow github.com/pypi.org, deny evil.com (by name!)
 - **DNS redirect** -- redirectme.example.com → 127.0.0.1
 - **Command blocking** -- sudo, docker, nsenter denied; ls, git, python allowed

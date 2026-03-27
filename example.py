@@ -19,14 +19,14 @@ from pathlib import Path
 # =============================================================================
 
 AGENTSH_REPO = "canyonroad/agentsh"
-AGENTSH_TAG = "v0.16.1"
+AGENTSH_TAG = "v0.16.8"
 DEB_ARCH = "amd64"
 
 # =============================================================================
 # SECURITY TEST DEFINITIONS
 # =============================================================================
 
-# NOTE: agentsh v0.16.1 uses ptrace-based enforcement which works on
+# NOTE: agentsh v0.16.8 uses ptrace-based enforcement which works on
 # gVisor/Modal. This provides DNS domain filtering, command blocking,
 # and file access control without needing seccomp_user_notify or FUSE.
 
