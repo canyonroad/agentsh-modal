@@ -1,6 +1,6 @@
 # agentsh + Modal
 
-Runtime security governance for AI agents using [agentsh](https://github.com/canyonroad/agentsh) v0.16.8 with [Modal Sandboxes](https://modal.com/products/sandboxes).
+Runtime security governance for AI agents using [agentsh](https://github.com/canyonroad/agentsh) v0.16.9 with [Modal Sandboxes](https://modal.com/products/sandboxes).
 
 ## Why agentsh + Modal?
 
@@ -77,7 +77,7 @@ modal.Sandbox.create()
 +--------+----------+
          |
    ptrace tracer
-   (v0.16.8)
+   (v0.16.9)
          |
    +-----+------+
    v      v      v
@@ -140,7 +140,7 @@ agentsh-modal/
 The `tests.py` script creates a Modal sandbox and runs security tests across these categories:
 
 - **Daemon & API** -- Health, ready, metrics, session management
-- **Version verification** -- Confirm v0.16.8 with ptrace active
+- **Version verification** -- Confirm v0.16.9 with ptrace active
 - **DNS domain-name filtering** -- Allow github.com/pypi.org, deny evil.com (by name!)
 - **DNS redirect** -- redirectme.example.com → 127.0.0.1
 - **Command blocking** -- sudo, docker, nsenter denied; ls, git, python allowed

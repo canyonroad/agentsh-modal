@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-agentsh v0.16.8 + Modal Sandbox Security Tests
+agentsh v0.16.9 + Modal Sandbox Security Tests
 
 Comprehensive tests for ptrace-based enforcement on Modal's gVisor runtime.
 Key demonstration: domain-name DNS filtering (not just IP-based blocking).
@@ -20,7 +20,7 @@ from pathlib import Path
 # =============================================================================
 
 AGENTSH_REPO = "canyonroad/agentsh"
-AGENTSH_TAG = "v0.16.8"
+AGENTSH_TAG = "v0.16.9"
 DEB_ARCH = "amd64"
 
 # Modal runs as root; workspace is /root
@@ -51,7 +51,7 @@ def create_agentsh_image() -> modal.Image:
             "dnsutils",
         )
         .run_commands(
-            "echo 'rebuilt: 2026-03-27T2'",  # cache bust BEFORE download to force re-fetch
+            "echo 'rebuilt: 2026-03-29T1'",  # cache bust BEFORE download to force re-fetch
             f"curl -fsSL -L '{deb_url}' -o /tmp/agentsh.deb",
             "dpkg -i /tmp/agentsh.deb",
             "rm -f /tmp/agentsh.deb",
