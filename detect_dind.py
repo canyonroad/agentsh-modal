@@ -7,7 +7,7 @@ The Docker container inside Modal might have real seccomp_user_notify support.
 import modal
 
 AGENTSH_REPO = "canyonroad/agentsh"
-AGENTSH_TAG = "v0.16.9"
+AGENTSH_TAG = "v0.18.0"
 DEB_ARCH = "amd64"
 
 
