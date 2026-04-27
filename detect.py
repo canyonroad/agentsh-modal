@@ -2,7 +2,7 @@
 """
 Functional ptrace probe inside a Modal sandbox.
 
-Verifies that PTRACE_SEIZE (used by agentsh v0.18.0 attach_mode: "children")
+Verifies that PTRACE_SEIZE (used by agentsh v0.18.3 attach_mode: "children")
 actually works, not just that capabilities are advertised.
 Also tests DNS resolution/blocking and file access control through agentsh's
 ptrace-based syscall interception (DNS proxy + openat).
@@ -15,7 +15,7 @@ import re
 from pathlib import Path
 
 AGENTSH_REPO = "canyonroad/agentsh"
-AGENTSH_TAG = "v0.18.0"
+AGENTSH_TAG = "v0.18.3"
 DEB_ARCH = "amd64"
 
 # C program that probes PTRACE_SEIZE / INTERRUPT / CONT / DETACH
@@ -310,7 +310,7 @@ def main():
             # ALLOW: write to workspace (/root)
             fa_out, _, fa_rc = run(
                 f"agentsh exec {session_id} -- "
-                "sh -c \"echo 'hello from agent' > /root/test.txt && cat /root/test.txt\" 2>&1",
+                "python3 -c \"p='/root/test.txt'; open(p,'w').write('hello from agent'); print(open(p).read(), end='')\" 2>&1",
                 "agentsh exec: write+read /root/test.txt (ALLOWED)",
             )
             file_allow_ok = fa_rc == 0 and "hello from agent" in fa_out

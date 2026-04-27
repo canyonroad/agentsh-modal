@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-agentsh v0.18.0 + Modal Sandbox Security Tests
+agentsh v0.18.3 + Modal Sandbox Security Tests
 
 Comprehensive tests for ptrace-based enforcement on Modal's gVisor runtime.
 Key demonstration: domain-name DNS filtering (not just IP-based blocking).
@@ -20,7 +20,7 @@ from pathlib import Path
 # =============================================================================
 
 AGENTSH_REPO = "canyonroad/agentsh"
-AGENTSH_TAG = "v0.18.0"
+AGENTSH_TAG = "v0.18.3"
 DEB_ARCH = "amd64"
 
 # Modal runs as root; workspace is /root
@@ -51,7 +51,7 @@ def create_agentsh_image() -> modal.Image:
             "dnsutils",
         )
         .run_commands(
-            "echo 'rebuilt: 2026-04-13T1'",  # cache bust BEFORE download to force re-fetch
+            "echo 'rebuilt: 2026-04-27T1'",  # cache bust BEFORE download to force re-fetch
             f"curl -fsSL -L '{deb_url}' -o /tmp/agentsh.deb",
             "dpkg -i /tmp/agentsh.deb",
             "rm -f /tmp/agentsh.deb",
@@ -464,7 +464,7 @@ def main():
 
             run_exec_test(sb, session_id, results,
                           f"Write to workspace ({WORKSPACE}) \u2014 ALLOWED",
-                          f"sh -c \"echo 'test data' > {WORKSPACE}/test_write.txt && cat {WORKSPACE}/test_write.txt\"")
+                          f"python3 -c \"p='{WORKSPACE}/test_write.txt'; open(p,'w').write('test data'); print(open(p).read(), end='')\"")
 
             run_exec_test(sb, session_id, results,
                           "Read /etc/hosts — ALLOWED (minimal config read)",
@@ -472,7 +472,7 @@ def main():
 
             run_exec_test(sb, session_id, results,
                           "Write to /tmp \u2014 ALLOWED",
-                          "sh -c \"echo 'temp data' > /tmp/test.txt && cat /tmp/test.txt\"")
+                          "python3 -c \"p='/tmp/test.txt'; open(p,'w').write('temp data'); print(open(p).read(), end='')\"")
 
             run_exec_test(sb, session_id, results,
                           "Read system binaries (stat /usr/bin/ls) \u2014 ALLOWED",
