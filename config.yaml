@@ -1,5 +1,5 @@
 # agentsh server configuration for Modal Sandboxes
-# agentsh v0.18.3
+# agentsh v0.20.2
 
 server:
   http:
@@ -41,7 +41,7 @@ sandbox:
     max_cpu_percent: 100
     max_processes: 256
 
-  # v0.18.3: ptrace-based enforcement (works on gVisor/Modal)
+  # v0.20.2: ptrace-based enforcement (works on gVisor/Modal)
   ptrace:
     enabled: true
     attach_mode: "children"
@@ -73,6 +73,24 @@ sandbox:
 
   unix_sockets:
     enabled: false  # mutually exclusive with ptrace
+
+  # seccomp BPF injection is unavailable on gVisor, so this stays disabled and
+  # ptrace is the enforcement engine. The settings below still apply: mitigation
+  # socket rules and the opaque shell-c posture are honored by the ptrace fallback.
+  seccomp:
+    enabled: false
+    # v0.19.3: Dirty Frag (CVE-2026-43284) socket-tuple mitigation. Expands to
+    # socket_rules (AF_RXRPC, AF_NETLINK/NETLINK_XFRM) that the ptrace fallback
+    # enforces even though seccomp BPF is off. Conservative: does not block all
+    # AF_NETLINK, so unrelated netlink users keep working.
+    mitigation_sets:
+      - dirtyfrag-conservative
+    # v0.20.2: opaque `bash -c "<script>"` posture. "enforce" (default) runs the
+    # script under per-exec ptrace policing (inner execve calls checked by
+    # CheckExecve) instead of blanket-denying unparseable scripts — so
+    # orchestrators that wrap every command in bash -c work while staying policed.
+    shellc:
+      opaque: "enforce"
 
   env_inject:
     BASH_ENV: "/usr/lib/agentsh/bash_startup.sh"

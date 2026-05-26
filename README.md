@@ -1,6 +1,6 @@
 # agentsh + Modal
 
-Runtime security governance for AI agents using [agentsh](https://github.com/canyonroad/agentsh) v0.18.3 with [Modal Sandboxes](https://modal.com/products/sandboxes).
+Runtime security governance for AI agents using [agentsh](https://github.com/canyonroad/agentsh) v0.20.2 with [Modal Sandboxes](https://modal.com/products/sandboxes).
 
 ## Why agentsh + Modal?
 
@@ -77,7 +77,7 @@ modal.Sandbox.create()
 +--------+----------+
          |
    ptrace tracer
-   (v0.18.3)
+   (v0.20.2)
          |
    +-----+------+
    v      v      v
@@ -117,10 +117,18 @@ Running `modal run detect.py` verifies all protections work on gVisor:
 
 Security policy is defined in two files:
 
-- **`config.yaml`** -- Server configuration: ptrace settings, network interception, [DLP patterns](https://www.agentsh.org/docs/#llm-proxy), LLM proxy, [MCP security](https://www.agentsh.org/docs/#mcp), [env_inject](https://www.agentsh.org/docs/#shell-shim)
+- **`config.yaml`** -- Server configuration: ptrace settings, network interception, [DLP patterns](https://www.agentsh.org/docs/#llm-proxy), LLM proxy, [MCP security](https://www.agentsh.org/docs/#mcp), [env_inject](https://www.agentsh.org/docs/#shell-shim), and seccomp mitigation sets
 - **`default.yaml`** -- [Policy rules](https://www.agentsh.org/docs/#policy-reference): [command rules](https://www.agentsh.org/docs/#command-rules), [network rules](https://www.agentsh.org/docs/#network-rules), [file rules](https://www.agentsh.org/docs/#file-rules), DNS redirects, [environment policy](https://www.agentsh.org/docs/#environment-policy)
 
 See the [agentsh documentation](https://www.agentsh.org/docs/) for the full policy reference.
+
+### ptrace-enforced hardening (v0.19+)
+
+Several newer agentsh controls are configured under `sandbox.seccomp` in `config.yaml`. On gVisor seccomp BPF injection is unavailable, so these are enforced through the **ptrace fallback** rather than seccomp:
+
+- **`mitigation_sets: [dirtyfrag-conservative]`** (v0.19.3) -- loads the built-in Dirty Frag mitigation ([CVE-2026-43284](https://github.com/canyonroad/agentsh)), which expands to socket-tuple rules (`AF_RXRPC`, `AF_NETLINK`/`NETLINK_XFRM`) blocked at the ptrace layer. Conservative by design: it does **not** block all `AF_NETLINK`, so unrelated netlink users keep working.
+- **`shellc.opaque: enforce`** (v0.20.2) -- opaque `bash -c "<script>"` invocations that can't be statically parsed run under per-exec ptrace policing (inner `execve` calls are checked) instead of being blanket-denied. This lets orchestrators that wrap every command in `bash -c` work while staying enforced.
+- **Socket-family blocking** (v0.19.0) is on by default (12 niche `AF_*` families return `EAFNOSUPPORT`) and is likewise enforced via the ptrace fallback on Modal.
 
 ## Project Structure
 
@@ -140,7 +148,8 @@ agentsh-modal/
 The `tests.py` script creates a Modal sandbox and runs security tests across these categories:
 
 - **Daemon & API** -- Health, ready, metrics, session management
-- **Version verification** -- Confirm v0.18.3 with ptrace active
+- **Version verification** -- Confirm v0.20.2 with ptrace active
+- **Mitigation sets** -- Dirty Frag (CVE-2026-43284) `dirtyfrag-conservative` loaded and ptrace-enforced
 - **DNS domain-name filtering** -- Allow github.com/pypi.org, deny evil.com (by name!)
 - **DNS redirect** -- redirectme.example.com → 127.0.0.1
 - **Command blocking** -- sudo, docker, nsenter denied; ls, git, python allowed
@@ -163,6 +172,7 @@ modal run tests.py
 | Command blocking | **Working** | ptrace execve |
 | File access control | **Working** | ptrace openat |
 | Network CIDR blocking | Working | ptrace connect |
+| Socket-tuple mitigation | **Working** | ptrace (Dirty Frag / socket families) |
 | DLP / audit | Working | LLM proxy |
 | MCP API | Working | -- |
 

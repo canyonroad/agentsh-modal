@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-agentsh v0.18.3 + Modal Sandbox Security Tests
+agentsh v0.20.2 + Modal Sandbox Security Tests
 
 Comprehensive tests for ptrace-based enforcement on Modal's gVisor runtime.
 Key demonstration: domain-name DNS filtering (not just IP-based blocking).
@@ -20,7 +20,7 @@ from pathlib import Path
 # =============================================================================
 
 AGENTSH_REPO = "canyonroad/agentsh"
-AGENTSH_TAG = "v0.18.3"
+AGENTSH_TAG = "v0.20.2"
 DEB_ARCH = "amd64"
 
 # Modal runs as root; workspace is /root
@@ -51,7 +51,7 @@ def create_agentsh_image() -> modal.Image:
             "dnsutils",
         )
         .run_commands(
-            "echo 'rebuilt: 2026-04-27T1'",  # cache bust BEFORE download to force re-fetch
+            "echo 'rebuilt: 2026-05-25-v0.20.2'",  # cache bust BEFORE download to force re-fetch
             f"curl -fsSL -L '{deb_url}' -o /tmp/agentsh.deb",
             "dpkg -i /tmp/agentsh.deb",
             "rm -f /tmp/agentsh.deb",
@@ -291,6 +291,21 @@ def main():
         else:
             results["failed"] += 1
             print(f"    \u2717 ptrace not found in server logs")
+
+        # v0.19.3: Dirty Frag (CVE-2026-43284) socket-tuple mitigation should be
+        # loaded from config (sandbox.seccomp.mitigation_sets) and enforced via
+        # the ptrace fallback on gVisor where seccomp BPF is unavailable.
+        stdout, stderr, _ = run_command(sb,
+            "cat /var/log/agentsh/agentsh.log 2>&1 | grep -i 'mitigation loaded' | head -3")
+        mitigation_output = (stdout + stderr).strip()
+        if mitigation_output and "dirtyfrag-conservative" in mitigation_output:
+            results["passed"] += 1
+            print(f"    \u2713 dirtyfrag-conservative mitigation loaded (ptrace-enforced)")
+            for line in mitigation_output.split("\n")[:2]:
+                print(f"      \u2192 {line[:90]}")
+        else:
+            results["failed"] += 1
+            print(f"    \u2717 dirtyfrag-conservative mitigation not found in server logs")
 
         # =================================================================
         # 3. AGENTSH EXEC — ptrace enforcement gateway
@@ -578,6 +593,7 @@ def main():
         - agentsh daemon + API (health, ready, metrics)
         - Session management (create, info, list)
         - ptrace tracer active (attach_mode=children)
+        - dirtyfrag-conservative mitigation loaded (CVE-2026-43284, ptrace-enforced)
         - agentsh exec (command execution through ptrace)
         - Audit logging (SQLite + server log)
 

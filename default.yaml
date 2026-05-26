@@ -9,7 +9,7 @@ description: |
   container escape, and credential leakage.
 
 # =============================================================================
-# DNS REDIRECT RULES (v0.18.3)
+# DNS REDIRECT RULES
 # =============================================================================
 
 dns_redirects:
