@@ -7,7 +7,7 @@ This may use a different runtime that supports seccomp_user_notify.
 import modal
 
 AGENTSH_REPO = "canyonroad/agentsh"
-AGENTSH_TAG = "v0.20.2"
+AGENTSH_TAG = "v0.20.3"
 DEB_ARCH = "amd64"
 
 
